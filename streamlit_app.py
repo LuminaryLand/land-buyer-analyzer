@@ -2,33 +2,37 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="Land Wholesaling & Buyer Analyzer",
-    page_icon="🏡",
-    layout="wide",
+    page_title="Land Wholesaling & Buyer Analyzer", page_icon="🏡", layout="wide"
 )
 
 st.title("🏡 Land Wholesaling & Cash Buyer Analyzer")
 st.markdown(
-    "Upload your county assessor CSV/Excel export or ListSource cash buyer"
-    " list to isolate active cash land buyers, builders, and LLCs."
+    "Upload your county assessor files (supports CSV, Excel, or Maricopa"
+    " pipe-delimited .txt files) to isolate active cash land buyers,"
+    " builders, and LLCs."
 )
 
 st.sidebar.header("1. Data Input")
 uploaded_file = st.sidebar.file_uploader(
-    "Upload County Records / Buyers List (.csv or .xlsx)",
-    type=["csv", "xlsx"],
+    "Upload County Records / Buyers List (.csv, .xlsx, or .txt)",
+    type=["csv", "xlsx", "txt"],
 )
 
 if uploaded_file is not None:
   try:
-    if uploaded_file.name.endswith(".csv"):
-      df = pd.read_csv(uploaded_file)
+    file_name = uploaded_file.name.lower()
+
+    # Automatically handle Maricopa's pipe-delimited format vs standard csv/excel
+    if file_name.endswith(".csv"):
+      df = pd.read_csv(uploaded_file, low_memory=False)
+    elif file_name.endswith(".txt"):
+      # Maricopa County GIS open data downloads are pipe-delimited text files
+      df = pd.read_csv(uploaded_file, sep="|", low_memory=False)
     else:
       df = pd.read_excel(uploaded_file)
 
     st.success(
-        f"Successfully loaded {len(df):,} rows and {len(df.columns)}"
-        " columns."
+        f"Successfully loaded {len(df):,} rows and {len(df.columns)} columns."
     )
 
     with st.expander("🔍 Preview Raw Data"):
@@ -37,23 +41,27 @@ if uploaded_file is not None:
     st.sidebar.header("2. Map Your Data Columns")
     columns = list(df.columns)
 
+
     def find_col(keywords):
       for col in columns:
-        if any(k in col.lower() for k in keywords):
+        if any(k in str(col).lower() for k in keywords):
           return col
       return columns[0]
+
 
     owner_col = st.sidebar.selectbox(
         "Owner / Buyer Name Column",
         columns,
         index=columns.index(
-            find_col(["owner", "buyer", "name", "grantee"])
+            find_col(["owner", "buyer", "name", "grantee", "owner_name"])
         ),
     )
     address_col = st.sidebar.selectbox(
         "Mailing Address Column",
         columns,
-        index=columns.index(find_col(["mail", "address", "situs"])),
+        index=columns.index(
+            find_col(["mail", "address", "situs", "mail_addr"])
+        ),
     )
 
     st.sidebar.header("3. Filter Criteria")
@@ -100,6 +108,6 @@ if uploaded_file is not None:
 
 else:
   st.info(
-      "👈 Upload a county dataset or buyer export using the sidebar to"
+      "👈 Upload your Maricopa dataset (.txt or .csv) using the sidebar to"
       " begin analysis."
   )
