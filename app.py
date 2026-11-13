@@ -23,16 +23,18 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     df = None
-    # Try multiple encodings commonly used by county legacy export systems
-    for enc in ["utf-8", "latin-1", "cp1252", "iso-8859-1"]:
+    # Expanded list of encodings and error handling strategies for county/enterprise exports
+    encodings = ["utf-8", "utf-16", "utf-16le", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+    
+    for enc in encodings:
         try:
             uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, low_memory=False, encoding=enc)
+            df = pd.read_csv(uploaded_file, low_memory=False, encoding=enc, errors="replace")
             break
         except Exception:
             try:
                 uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=None, engine="python", encoding=enc)
+                df = pd.read_csv(uploaded_file, sep=None, engine="python", encoding=enc, errors="replace")
                 break
             except Exception:
                 continue
@@ -58,6 +60,6 @@ if uploaded_file is not None:
         with st.expander("Inspect Available Columns"):
             st.write(list(df.columns))
     else:
-        st.error("Error reading file: Could not decode the file with standard encodings (utf-8, latin-1, cp1252). Please check the file format.")
+        st.error("Error reading file: Could not decode the file. Please verify if the export is a standard CSV/TXT file.")
 else:
     st.warning("No data found in the uploaded files. Please upload a valid sales affidavit export file to begin.")
