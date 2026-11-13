@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 
+# Page Configuration
 st.set_page_config(
     page_title="County Builder & Cash Buyer Analyzer",
     page_icon="🏡",
@@ -9,62 +10,48 @@ st.set_page_config(
 
 st.title("🏡 County Builder & Cash Buyer Analyzer")
 st.markdown(
-    "Upload your county **Sales Affidavits** export (`.txt` or `.csv`) to isolate active builders "
-    "and land buyers over a custom time window, regardless of the county."
+    "Upload your county **Sales Affidavits** export (`.txt` or `.csv`) to isolate "
+    "active builders and land buyers over a custom time window, regardless of the county."
 )
 
-with st.sidebar:
-    st.header("1. Data Input")
-    uploaded_files = st.file_uploader(
-        "Upload Sales Affidavits Files (Multi-select allowed)",
-        type=["txt", "csv"],
-        accept_multiple_files=True
-    )
-    
-    st.divider()
-    st.header("2. Filter Parameters")
-    min_price = st.number_input("Minimum Sale Price ($)", value=10000, step=5000)
-    max_price = st.number_input("Maximum Sale Price ($)", value=500000, step=25000)
+# File Uploader
+uploaded_file = st.file_uploader(
+    "Upload Sales Affidavits File",
+    type=["csv", "txt"],
+    help="Upload your county export file (CSV or TXT)"
+)
 
-if uploaded_files:
-    @st.cache_data
-    def load_data(files):
-        dfs = []
-        for file in files:
-            try:
-                # Try reading with flexible delimiters (tab, comma, pipe)
-                df = pd.read_csv(file, low_memory=False, sep=None, engine='python')
-                dfs.append(df)
-            except Exception as e:
-                st.error(f"Error reading {file.name}: {e}")
-        if dfs:
-            return pd.concat(dfs, ignore_index=True)
-        return pd.DataFrame()
-
-    with st.spinner("Processing county records..."):
-        df = load_data(uploaded_files)
-
-    if not df.empty:
-        st.success(f"Successfully loaded {len(df):,} total records across {len(uploaded_files)} file(s).")
+if uploaded_file is not None:
+    try:
+        # Robust file reading that automatically handles standard CSVs or tab-delimited exports
+        try:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, low_memory=False)
+        except Exception:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, sep=None, engine="python")
+            
+        st.success(f"Successfully loaded file! Total rows: {len(df):,}")
         
-        # Display raw preview
-        with st.expander("🔍 Preview Raw Data"):
-            st.dataframe(df.head(100))
-
-        # Basic filtering logic matching common county affidavit structures
-        st.subheader("📊 Buyer Analysis & Insights")
-        st.info("Tip: Ensure your columns include buyer name and sale price fields for deeper filtering.")
+        # Display Data Preview
+        st.subheader("📊 Data Preview")
+        st.dataframe(df.head(100), use_container_width=True)
         
-        # Show summary metrics
+        # Basic column info & metrics summary
+        st.subheader("📋 Dataset Summary")
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Total Records", f"{len(df):,}")
+            st.metric("Total Rows", f"{len(df):,}")
         with col2:
-            st.metric("Columns Detected", len(df.columns))
+            st.metric("Total Columns", f"{len(df.columns)}")
         with col3:
-            st.metric("Files Processed", len(uploaded_files))
+            st.metric("Missing Values", f"{df.isna().sum().sum():,}")
             
-    else:
-        st.warning("No data found in the uploaded files. Please check your export format.")
+        # Column Inspector
+        with st.expander("Inspect Available Columns"):
+            st.write(list(df.columns))
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
 else:
-    st.info("👈 Upload your county Sales Affidavits files (.txt or .csv) in the sidebar to begin.")
+    st.warning("No data found in the uploaded files. Please upload a valid sales affidavit export file to begin.")
