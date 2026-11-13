@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import io
 
 # Page Configuration
 st.set_page_config(
@@ -14,32 +15,58 @@ st.markdown(
     "active builders and land buyers over a custom time window, regardless of the county."
 )
 
-# File Uploader
+# File Uploader (now supports Excel formats just in case)
 uploaded_file = st.file_uploader(
     "Upload Sales Affidavits File",
-    type=["csv", "txt"],
-    help="Upload your county export file (CSV or TXT)"
+    type=["csv", "txt", "xlsx", "xls"],
+    help="Upload your county export file (CSV, TXT, or Excel)"
 )
 
 if uploaded_file is not None:
     df = None
-    # Expanded list of encodings and error handling strategies for county/enterprise exports
-    encodings = ["utf-8", "utf-16", "utf-16le", "utf-8-sig", "latin-1", "cp1252", "iso-8859-1"]
+    file_bytes = uploaded_file.getvalue()
     
-    for enc in encodings:
-        try:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, low_memory=False, encoding=enc, errors="replace")
-            break
-        except Exception:
-            try:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=None, engine="python", encoding=enc, errors="replace")
-                break
-            except Exception:
-                continue
+    # 1. Try reading as an Excel file (in case a county export is an .xlsx/.xls renamed to .txt)
+    try:
+        df = pd.read_excel(io.BytesIO(file_bytes))
+    except Exception:
+        pass
 
-    if df is not None:
+    # 2. If not Excel, try robust text/CSV parsing with auto-delimiter and encoding fallback
+    if df is None:
+        encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1", "utf-16", "utf-16le"]
+        delimiters = [",", "\t", "|", ";", None]
+        
+        for enc in encodings:
+            for sep in delimiters:
+                try:
+                    uploaded_file.seek(0)
+                    if sep is None:
+                        df = pd.read_csv(
+                            uploaded_file, 
+                            encoding=enc, 
+                            engine="python", 
+                            on_bad_lines="skip", 
+                            low_memory=False
+                        )
+                    else:
+                        df = pd.read_csv(
+                            uploaded_file, 
+                            sep=sep, 
+                            encoding=enc, 
+                            engine="python", 
+                            on_bad_lines="skip", 
+                            low_memory=False
+                        )
+                    # Verify we got actual columns/data rather than a single malformed column
+                    if df is not None and len(df.columns) > 1:
+                        break
+                except Exception:
+                    continue
+            if df is not None and len(df.columns) > 1:
+                break
+
+    if df is not None and len(df) > 0:
         st.success(f"Successfully loaded file! Total rows: {len(df):,}")
         
         # Display Data Preview
@@ -60,6 +87,9 @@ if uploaded_file is not None:
         with st.expander("Inspect Available Columns"):
             st.write(list(df.columns))
     else:
-        st.error("Error reading file: Could not decode the file. Please verify if the export is a standard CSV/TXT file.")
+        st.error(
+            "Could not automatically parse this file format. County exports often use "
+            "pipe-delimiters (`|`), custom headers, or fixed-width columns. Please verify the file format."
+        )
 else:
     st.warning("No data found in the uploaded files. Please upload a valid sales affidavit export file to begin.")
