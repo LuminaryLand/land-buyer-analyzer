@@ -25,11 +25,11 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
     file_bytes = uploaded_file.getvalue()
     
-    # Sidebar manual parsing controls
+    # Sidebar manual parsing controls (Pipe set as default)
     st.sidebar.header("⚙️ Parsing Options")
     delimiter_choice = st.sidebar.selectbox(
         "Delimiter", 
-        ["Auto-Detect", "Tab (\\t)", "Pipe (|)", "Comma (,)", "Semicolon (;)"]
+        ["Pipe (|)", "Auto-Detect", "Tab (\\t)", "Comma (,)", "Semicolon (;)"]
     )
     skip_rows = st.sidebar.number_input("Skip Header Rows", min_value=0, max_value=20, value=0)
 
@@ -61,36 +61,26 @@ if uploaded_file is not None:
                 except Exception:
                     continue
         else:
-            # 1. Try Excel first
-            try:
-                df = pd.read_excel(io.BytesIO(file_bytes), skiprows=skip_rows)
-            except Exception:
-                pass
-
-            # 2. Try standard text delimiters
-            if df is None:
-                encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1", "utf-16", "utf-16le"]
-                delimiters = ["\t", "|", ",", ";"]
-                
-                for enc in encodings:
-                    for sep in delimiters:
-                        try:
-                            uploaded_file.seek(0)
-                            df = pd.read_csv(
-                                uploaded_file, 
-                                sep=sep, 
-                                skiprows=skip_rows, 
-                                encoding=enc, 
-                                engine="python", 
-                                on_bad_lines="skip", 
-                                low_memory=False
-                            )
-                            if df is not None and len(df.columns) > 1:
-                                break
-                        except Exception:
-                            continue
-                    if df is not None and len(df.columns) > 1:
-                        break
+            # Try Pipe first in Auto-Detect
+            for enc in ["utf-8", "latin-1", "cp1252", "iso-8859-1", "utf-16", "utf-16le"]:
+                for sep in ["|", "\t", ",", ";"]:
+                    try:
+                        uploaded_file.seek(0)
+                        df = pd.read_csv(
+                            uploaded_file, 
+                            sep=sep, 
+                            skiprows=skip_rows, 
+                            encoding=enc, 
+                            engine="python", 
+                            on_bad_lines="skip", 
+                            low_memory=False
+                        )
+                        if df is not None and len(df.columns) > 1:
+                            break
+                    except Exception:
+                        continue
+                if df is not None and len(df.columns) > 1:
+                    break
 
     except Exception as e:
         st.error(f"Parsing error: {e}")
@@ -117,17 +107,8 @@ if uploaded_file is not None:
             st.write(list(df.columns))
     else:
         st.error(
-            "Could not automatically parse this file format. "
-            "Check the sidebar **Parsing Options** to manually select your delimiter (Tab or Pipe) or skip extra title rows."
+            "Could not parse this file format. Check the sidebar **Parsing Options** "
+            "or adjust the **Skip Header Rows** if there's introductory text."
         )
-        
-        # Show raw preview to help diagnose the layout
-        with st.expander("🔍 View Raw File Preview (First 10 lines)"):
-            try:
-                uploaded_file.seek(0)
-                raw_text = uploaded_file.read(2000).decode("latin-1", errors="replace")
-                st.code(raw_text)
-            except Exception as ex:
-                st.write("Could not read raw text preview:", ex)
 else:
     st.warning("No data found in the uploaded files. Please upload a valid sales affidavit export file to begin.")
